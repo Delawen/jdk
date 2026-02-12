@@ -483,7 +483,6 @@ void ConstantPoolCache::remove_resolved_method_entries_if_non_deterministic() {
     } else {
       rme->remove_unshareable_info();
     }
-
     LogStreamHandle(Trace, aot, resolve) log;
     if (log.is_enabled()) {
       ResourceMark rm;
