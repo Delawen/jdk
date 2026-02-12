@@ -450,12 +450,14 @@ void ConstantPoolCache::remove_resolved_field_entries_if_non_deterministic() {
       Symbol* klass_name = cp->klass_name_at(klass_cp_index);
       Symbol* name = cp->uncached_name_ref_at(cp_index);
       Symbol* signature = cp->uncached_signature_ref_at(cp_index);
-      log.print("%s field  CP entry [%3d]: %s => %s.%s:%s%s",
-                (archived ? "archived" : "reverted"),
-                cp_index,
-                cp->pool_holder()->name()->as_C_string(),
-                klass_name->as_C_string(), name->as_C_string(), signature->as_C_string(),
-                rfi->is_resolved(Bytecodes::_getstatic) || rfi->is_resolved(Bytecodes::_putstatic) ? " *** static" : "");
+      if (resolved) {
+        log.print("%s field  CP entry [%3d]: %s => %s.%s:%s%s",
+                  (archived ? "archived" : "reverted"),
+                  cp_index,
+                  cp->pool_holder()->name()->as_C_string(),
+                  klass_name->as_C_string(), name->as_C_string(), signature->as_C_string(),
+                  rfi->is_resolved(Bytecodes::_getstatic) || rfi->is_resolved(Bytecodes::_putstatic) ? " *** static" : "");
+      }
     }
     ArchiveBuilder::alloc_stats()->record_field_cp_entry(archived, resolved && !archived);
   }
@@ -481,6 +483,7 @@ void ConstantPoolCache::remove_resolved_method_entries_if_non_deterministic() {
     } else {
       rme->remove_unshareable_info();
     }
+
     LogStreamHandle(Trace, aot, resolve) log;
     if (log.is_enabled()) {
       ResourceMark rm;
@@ -488,12 +491,14 @@ void ConstantPoolCache::remove_resolved_method_entries_if_non_deterministic() {
       Symbol* klass_name = cp->klass_name_at(klass_cp_index);
       Symbol* name = cp->uncached_name_ref_at(cp_index);
       Symbol* signature = cp->uncached_signature_ref_at(cp_index);
-      log.print("%s%s method CP entry [%3d]: %s %s.%s:%s",
-                (archived ? "archived" : "reverted"),
-                (rme->is_resolved(Bytecodes::_invokeinterface) ? " interface" : ""),
-                cp_index,
-                cp->pool_holder()->name()->as_C_string(),
-                klass_name->as_C_string(), name->as_C_string(), signature->as_C_string());
+      if (resolved) {
+        log.print("%s%s method CP entry [%3d]: %s %s.%s:%s",
+                  (archived ? "archived" : "reverted"),
+                  (rme->is_resolved(Bytecodes::_invokeinterface) ? " interface" : ""),
+                  cp_index,
+                  cp->pool_holder()->name()->as_C_string(),
+                  klass_name->as_C_string(), name->as_C_string(), signature->as_C_string());
+      }
       if (archived) {
         Klass* resolved_klass = cp->resolved_klass_at(klass_cp_index);
         log.print(" => %s%s",
@@ -528,11 +533,13 @@ void ConstantPoolCache::remove_resolved_indy_entries_if_non_deterministic() {
       Symbol* bsm_name = cp->uncached_name_ref_at(bsm_ref);
       Symbol* bsm_signature = cp->uncached_signature_ref_at(bsm_ref);
       Symbol* bsm_klass = cp->klass_name_at(cp->uncached_klass_ref_index_at(bsm_ref));
-      log.print("%s indy   CP entry [%3d]: %s (%d)",
-                (archived ? "archived" : "reverted"),
-                cp_index, cp->pool_holder()->name()->as_C_string(), i);
-      log.print(" %s %s.%s:%s", (archived ? "=>" : "  "), bsm_klass->as_C_string(),
-                bsm_name->as_C_string(), bsm_signature->as_C_string());
+      if (resolved) {
+        log.print("%s indy   CP entry [%3d]: %s (%d)",
+                  (archived ? "archived" : "reverted"),
+                  cp_index, cp->pool_holder()->name()->as_C_string(), i);
+        log.print(" %s %s.%s:%s", (archived ? "=>" : "  "), bsm_klass->as_C_string(),
+                  bsm_name->as_C_string(), bsm_signature->as_C_string());
+      }
     }
     ArchiveBuilder::alloc_stats()->record_indy_cp_entry(archived, resolved && !archived);
   }
@@ -544,26 +551,50 @@ bool ConstantPoolCache::can_archive_resolved_method(ConstantPool* src_cp, Resolv
   if (pool_holder->defined_by_other_loaders()) {
     // Archiving resolved cp entries for classes from non-builtin loaders
     // is not yet supported.
+    if (log.is_enabled()) {
+      log.print("%s can't be archived because it comes from a non-builtin loader.",
+                pool_holder->name()->as_C_string());
+    }
     return false;
   }
 
   if (CDSConfig::is_dumping_dynamic_archive()) {
     // InstanceKlass::methods() has been resorted. We need to
     // update the vtable_index in method_entry (not implemented)
+    if (log.is_enabled()) {
+      log.print("%s can't be archived because InstanceKlass::methods() has been resorted.",
+                pool_holder->name()->as_C_string());
+    }
     return false;
   }
 
   if (!method_entry->is_resolved(Bytecodes::_invokevirtual)) {
     if (method_entry->method() == nullptr) {
+      if (log.is_enabled()) {
+        log.print("%s can't be archived because the method entry is not resolved.",
+                  pool_holder->name()->as_C_string());
+      }
       return false;
     }
     if (method_entry->method()->is_continuation_native_intrinsic()) {
+      if (log.is_enabled()) {
+        log.print("%s can't be archived because the corresponding stub is generated on demand during method resolution.",
+                  pool_holder->name()->as_C_string());
+      }
       return false; // FIXME: corresponding stub is generated on demand during method resolution (see LinkResolver::resolve_static_call).
     }
     if (method_entry->is_resolved(Bytecodes::_invokehandle) && !CDSConfig::is_dumping_method_handles()) {
+      if (log.is_enabled()) {
+        log.print("%s can't be archived because we are not dumping method handles.",
+                  pool_holder->name()->as_C_string());
+      }
       return false;
     }
     if (method_entry->method()->is_method_handle_intrinsic() && !CDSConfig::is_dumping_method_handles()) {
+      if (log.is_enabled()) {
+        log.print("%s can't be archived because we are not dumping intrinsic method handles.",
+                  pool_holder->name()->as_C_string());
+      }
       return false;
     }
   }
@@ -572,6 +603,10 @@ bool ConstantPoolCache::can_archive_resolved_method(ConstantPool* src_cp, Resolv
   assert(src_cp->tag_at(cp_index).is_method() || src_cp->tag_at(cp_index).is_interface_method(), "sanity");
 
   if (!AOTConstantPoolResolver::is_resolution_deterministic(src_cp, cp_index)) {
+    if (log.is_enabled()) {
+      log.print("%s can't be archived because its resolution is not deterministic.",
+                pool_holder->name()->as_C_string());
+    }
     return false;
   }
   return true;
