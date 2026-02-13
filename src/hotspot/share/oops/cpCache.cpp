@@ -457,6 +457,13 @@ void ConstantPoolCache::remove_resolved_field_entries_if_non_deterministic() {
                   cp->pool_holder()->name()->as_C_string(),
                   klass_name->as_C_string(), name->as_C_string(), signature->as_C_string(),
                   rfi->is_resolved(Bytecodes::_getstatic) || rfi->is_resolved(Bytecodes::_putstatic) ? " *** static" : "");
+        if (!archived && !CDSConfig::is_dumping_preimage_static_archive()) {
+          log.print("%s field  CP entry [%3d] => %s.%s:%s%s can't be archived because its resolution is not deterministic.",
+                    src_cp->pool_holder()->name()->as_C_string(),
+                    cp_index,
+                    klass_name->as_C_string(), name->as_C_string(), signature->as_C_string(),
+                    rfi->is_resolved(Bytecodes::_getstatic) || rfi->is_resolved(Bytecodes::_putstatic) ? " *** static" : "");
+        }
       }
     }
     ArchiveBuilder::alloc_stats()->record_field_cp_entry(archived, resolved && !archived);
@@ -538,6 +545,10 @@ void ConstantPoolCache::remove_resolved_indy_entries_if_non_deterministic() {
                   cp_index, cp->pool_holder()->name()->as_C_string(), i);
         log.print(" %s %s.%s:%s", (archived ? "=>" : "  "), bsm_klass->as_C_string(),
                   bsm_name->as_C_string(), bsm_signature->as_C_string());
+        if (!archived && !CDSConfig::is_dumping_preimage_static_archive()) {
+          log.print("%s (%d) indy   CP entry [%3d] can't be archived because its resolution is not deterministic.",
+                    cp->pool_holder()->name()->as_C_string(), cp_index, i);
+        }
       }
     }
     ArchiveBuilder::alloc_stats()->record_indy_cp_entry(archived, resolved && !archived);
