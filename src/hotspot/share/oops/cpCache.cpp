@@ -551,14 +551,13 @@ bool ConstantPoolCache::can_archive_resolved_method(ConstantPool* src_cp, Resolv
     // Archiving resolved cp entries for classes from non-builtin loaders
     // is not yet supported.
     if (log.is_enabled()) {
-      log.print("%s can't be archived because it comes from a non-builtin loader.",
       int cp_index = method_entry->constant_pool_index();
       int klass_cp_index = src_cp->uncached_klass_ref_index_at(cp_index);
       Symbol* klass_name = src_cp->klass_name_at(klass_cp_index);
       Symbol* name = src_cp->uncached_name_ref_at(cp_index);
       Symbol* signature = src_cp->uncached_signature_ref_at(cp_index);
       ResourceMark rm;
-      log.print("%s resolved CP entry [%3d] =>%s method %s.%s:%s cannot be archived because pool holder comes from a non-builtin loader.",
+      log.print("%s resolved CP entry [%3d] =>%s method %s.%s:%s can't be archived because pool holder comes from a non-builtin loader.",
                 src_cp->pool_holder()->name()->as_C_string(),
                 cp_index,
                 (method_entry->is_resolved(Bytecodes::_invokeinterface) ? " interface" : ""),
