@@ -614,8 +614,18 @@ bool ConstantPoolCache::can_archive_resolved_method(ConstantPool* src_cp, Resolv
 
   if (!AOTConstantPoolResolver::is_resolution_deterministic(src_cp, cp_index)) {
     if (log.is_enabled()) {
-      log.print("%s can't be archived because its resolution is not deterministic.",
-                pool_holder->name()->as_C_string());
+      int klass_cp_index = src_cp->uncached_klass_ref_index_at(cp_index);
+      Symbol* klass_name = src_cp->klass_name_at(klass_cp_index);
+      Symbol* name = src_cp->uncached_name_ref_at(cp_index);
+      Symbol* signature = src_cp->uncached_signature_ref_at(cp_index);
+      ResourceMark rm;
+      log.print("%s resolved CP entry [%3d] =>%s method %s.%s:%s can't be archived because its resolution is not deterministic.",
+                src_cp->pool_holder()->name()->as_C_string(),
+                cp_index,
+                (method_entry->is_resolved(Bytecodes::_invokeinterface) ? " interface" : ""),
+                klass_name->as_C_string(),
+                name->as_C_string(),
+                signature->as_C_string());
     }
     return false;
   }
