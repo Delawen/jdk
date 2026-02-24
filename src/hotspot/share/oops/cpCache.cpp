@@ -22,6 +22,8 @@
  *
  */
 
+#include <string>
+
 #include "cds/aotConstantPoolResolver.hpp"
 #include "cds/archiveBuilder.hpp"
 #include "cds/cdsConfig.hpp"
@@ -477,8 +479,9 @@ void ConstantPoolCache::remove_resolved_method_entries_if_non_deterministic() {
                     rme->is_resolved(Bytecodes::_invokehandle)    ||
                     (rme->is_resolved(Bytecodes::_invokestatic) && VM_Version::supports_fast_class_init_checks());
 
+    const char *reason = nullptr;
     if (resolved && !CDSConfig::is_dumping_preimage_static_archive()
-        && can_archive_resolved_method(src_cp, rme)) {
+        && can_archive_resolved_method(src_cp, rme, reason)) {
       rme->mark_and_relocate(src_cp);
       archived = true;
     } else {
@@ -492,12 +495,13 @@ void ConstantPoolCache::remove_resolved_method_entries_if_non_deterministic() {
       Symbol* name = cp->uncached_name_ref_at(cp_index);
       Symbol* signature = cp->uncached_signature_ref_at(cp_index);
       if (resolved) {
-        log.print("%s%s method CP entry [%3d]: %s %s.%s:%s",
+        log.print("%s%s method CP entry [%3d]: %s %s.%s:%s %s",
                   (archived ? "archived" : "reverted"),
                   (rme->is_resolved(Bytecodes::_invokeinterface) ? " interface" : ""),
                   cp_index,
                   cp->pool_holder()->name()->as_C_string(),
-                  klass_name->as_C_string(), name->as_C_string(), signature->as_C_string());
+                  klass_name->as_C_string(), name->as_C_string(), signature->as_C_string(),
+                  (reason == nullptr ? "" : reason));
       }
       if (archived) {
         Klass* resolved_klass = cp->resolved_klass_at(klass_cp_index);
@@ -546,104 +550,38 @@ void ConstantPoolCache::remove_resolved_indy_entries_if_non_deterministic() {
   }
 }
 
-bool ConstantPoolCache::can_archive_resolved_method(ConstantPool* src_cp, ResolvedMethodEntry* method_entry) {
+bool ConstantPoolCache::can_archive_resolved_method(ConstantPool* src_cp, const ResolvedMethodEntry* method_entry, const char*& reason) {
   LogStreamHandle(Trace, aot, resolve) log;
   InstanceKlass* pool_holder = constant_pool()->pool_holder();
   if (pool_holder->defined_by_other_loaders()) {
     // Archiving resolved cp entries for classes from non-builtin loaders
     // is not yet supported.
-    if (log.is_enabled()) {
-      int cp_index = method_entry->constant_pool_index();
-      int klass_cp_index = src_cp->uncached_klass_ref_index_at(cp_index);
-      Symbol* klass_name = src_cp->klass_name_at(klass_cp_index);
-      Symbol* name = src_cp->uncached_name_ref_at(cp_index);
-      Symbol* signature = src_cp->uncached_signature_ref_at(cp_index);
-      ResourceMark rm;
-      log.print("reverted method CP entry [%3d]: %s %s.%s:%s (pool holder comes from a non-builtin loader)",
-                cp_index,
-                src_cp->pool_holder()->name()->as_C_string(),
-                klass_name->as_C_string(), name->as_C_string(), signature->as_C_string());
-    }
+    reason = "(pool holder comes from a non-builtin loader)";
     return false;
   }
 
   if (CDSConfig::is_dumping_dynamic_archive()) {
     // InstanceKlass::methods() has been resorted. We need to
     // update the vtable_index in method_entry (not implemented)
-    if (log.is_enabled()) {
-      int cp_index = method_entry->constant_pool_index();
-      int klass_cp_index = src_cp->uncached_klass_ref_index_at(cp_index);
-      Symbol* klass_name = src_cp->klass_name_at(klass_cp_index);
-      Symbol* name = src_cp->uncached_name_ref_at(cp_index);
-      Symbol* signature = src_cp->uncached_signature_ref_at(cp_index);
-      ResourceMark rm;
-      log.print("reverted method CP entry [%3d]: %s %s.%s:%s (InstanceKlass::methods() has been resorted)",
-                cp_index,
-                src_cp->pool_holder()->name()->as_C_string(),
-                klass_name->as_C_string(), name->as_C_string(), signature->as_C_string());
-    }
+    reason = "(InstanceKlass::methods() has been resorted)";
     return false;
   }
 
   if (!method_entry->is_resolved(Bytecodes::_invokevirtual)) {
     if (method_entry->method() == nullptr) {
-      if (log.is_enabled()) {
-        int cp_index = method_entry->constant_pool_index();
-        int klass_cp_index = src_cp->uncached_klass_ref_index_at(cp_index);
-        Symbol* klass_name = src_cp->klass_name_at(klass_cp_index);
-        Symbol* name = src_cp->uncached_name_ref_at(cp_index);
-        Symbol* signature = src_cp->uncached_signature_ref_at(cp_index);
-        ResourceMark rm;
-        log.print("reverted method CP entry [%3d]: %s %s.%s:%s (method entry is not resolved)",
-                  cp_index,
-                  src_cp->pool_holder()->name()->as_C_string(),
-                  klass_name->as_C_string(), name->as_C_string(), signature->as_C_string());
-      }
+      reason = "(method entry is not resolved)";
       return false;
     }
     if (method_entry->method()->is_continuation_native_intrinsic()) {
-      if (log.is_enabled()) {
-        int cp_index = method_entry->constant_pool_index();
-        int klass_cp_index = src_cp->uncached_klass_ref_index_at(cp_index);
-        Symbol* klass_name = src_cp->klass_name_at(klass_cp_index);
-        Symbol* name = src_cp->uncached_name_ref_at(cp_index);
-        Symbol* signature = src_cp->uncached_signature_ref_at(cp_index);
-        ResourceMark rm;
-        log.print("reverted method CP entry [%3d]: %s %s.%s:%s (corresponding stub is generated on demand during method resolution)",
-                  cp_index,
-                  src_cp->pool_holder()->name()->as_C_string(),
-                  klass_name->as_C_string(), name->as_C_string(), signature->as_C_string());
-      }
+      reason = "(corresponding stub is generated on demand during method resolution)";
       return false; // FIXME: corresponding stub is generated on demand during method resolution (see LinkResolver::resolve_static_call).
     }
     if (method_entry->is_resolved(Bytecodes::_invokehandle) && !CDSConfig::is_dumping_method_handles()) {
-      if (log.is_enabled()) {
-        int cp_index = method_entry->constant_pool_index();
-        int klass_cp_index = src_cp->uncached_klass_ref_index_at(cp_index);
-        Symbol* klass_name = src_cp->klass_name_at(klass_cp_index);
-        Symbol* name = src_cp->uncached_name_ref_at(cp_index);
-        Symbol* signature = src_cp->uncached_signature_ref_at(cp_index);
-        ResourceMark rm;
-        log.print("reverted method CP entry [%3d]: %s %s.%s:%s (not dumping method handles)",
-                  cp_index,
-                  src_cp->pool_holder()->name()->as_C_string(),
-                  klass_name->as_C_string(), name->as_C_string(), signature->as_C_string());
-      }
+      reason = "(not dumping method handles)";
       return false;
     }
     if (method_entry->method()->is_method_handle_intrinsic() && !CDSConfig::is_dumping_method_handles()) {
-      if (log.is_enabled()) {
-        int cp_index = method_entry->constant_pool_index();
-        int klass_cp_index = src_cp->uncached_klass_ref_index_at(cp_index);
-        Symbol* klass_name = src_cp->klass_name_at(klass_cp_index);
-        Symbol* name = src_cp->uncached_name_ref_at(cp_index);
-        Symbol* signature = src_cp->uncached_signature_ref_at(cp_index);
-        ResourceMark rm;
-        log.print("reverted method CP entry [%3d]: %s %s.%s:%s (not dumping intrinsic method handles)",
-                  cp_index,
-                  src_cp->pool_holder()->name()->as_C_string(),
-                  klass_name->as_C_string(), name->as_C_string(), signature->as_C_string());
-      }
+      reason = "(not dumping intrinsic method handles)";
       return false;
     }
   }
@@ -652,17 +590,7 @@ bool ConstantPoolCache::can_archive_resolved_method(ConstantPool* src_cp, Resolv
   assert(src_cp->tag_at(cp_index).is_method() || src_cp->tag_at(cp_index).is_interface_method(), "sanity");
 
   if (!AOTConstantPoolResolver::is_resolution_deterministic(src_cp, cp_index)) {
-    if (log.is_enabled()) {
-      int klass_cp_index = src_cp->uncached_klass_ref_index_at(cp_index);
-      Symbol* klass_name = src_cp->klass_name_at(klass_cp_index);
-      Symbol* name = src_cp->uncached_name_ref_at(cp_index);
-      Symbol* signature = src_cp->uncached_signature_ref_at(cp_index);
-      ResourceMark rm;
-      log.print("reverted method CP entry [%3d]: %s %s.%s:%s (resolution is not deterministic)",
-                cp_index,
-                src_cp->pool_holder()->name()->as_C_string(),
-                klass_name->as_C_string(), name->as_C_string(), signature->as_C_string());
-    }
+      reason = "(resolution is not deterministic)";
     return false;
   }
   return true;

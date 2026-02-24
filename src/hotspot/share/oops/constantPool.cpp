@@ -310,8 +310,8 @@ void ConstantPool::iterate_archivable_resolved_references(Function function) {
     if (method_entries != nullptr) {
       for (int i = 0; i < method_entries->length(); i++) {
         ResolvedMethodEntry* rme = method_entries->adr_at(i);
-        if (rme->is_resolved(Bytecodes::_invokehandle) && rme->has_appendix() &&
-            cache()->can_archive_resolved_method(this, rme)) {
+        if (const char* reason; rme->is_resolved(Bytecodes::_invokehandle) && rme->has_appendix() &&
+                               cache()->can_archive_resolved_method(this, rme, reason)) {
           int rr_index = rme->resolved_references_index();
           assert(resolved_reference_at(rr_index) != nullptr, "must exist");
           function(rr_index);
