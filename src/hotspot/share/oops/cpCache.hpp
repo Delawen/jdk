@@ -226,7 +226,7 @@ class ConstantPoolCache: public MetaspaceObj {
   void remove_resolved_field_entries_if_non_deterministic();
   void remove_resolved_indy_entries_if_non_deterministic();
   void remove_resolved_method_entries_if_non_deterministic();
-  bool can_archive_resolved_method(ConstantPool* src_cp, const ResolvedMethodEntry* method_entry, const char*& reason);
+  bool can_archive_resolved_method(ConstantPool* src_cp, ResolvedMethodEntry* method_entry, const char*& reason);
 #endif
 
   // RedefineClasses support
