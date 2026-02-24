@@ -22,8 +22,6 @@
  *
  */
 
-#include <string>
-
 #include "cds/aotConstantPoolResolver.hpp"
 #include "cds/archiveBuilder.hpp"
 #include "cds/cdsConfig.hpp"
@@ -550,7 +548,7 @@ void ConstantPoolCache::remove_resolved_indy_entries_if_non_deterministic() {
   }
 }
 
-bool ConstantPoolCache::can_archive_resolved_method(ConstantPool* src_cp, const ResolvedMethodEntry* method_entry, const char*& reason) {
+bool ConstantPoolCache::can_archive_resolved_method(ConstantPool* src_cp, ResolvedMethodEntry* method_entry, const char*& reason) {
   LogStreamHandle(Trace, aot, resolve) log;
   InstanceKlass* pool_holder = constant_pool()->pool_holder();
   if (pool_holder->defined_by_other_loaders()) {
