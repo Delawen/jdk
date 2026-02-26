@@ -493,13 +493,17 @@ void ConstantPoolCache::remove_resolved_method_entries_if_non_deterministic() {
       Symbol* name = cp->uncached_name_ref_at(cp_index);
       Symbol* signature = cp->uncached_signature_ref_at(cp_index);
       if (resolved) {
-        log.print("%s%s method CP entry [%3d]: %s %s.%s:%s%s",
-                  (archived ? "archived" : "reverted"),
-                  (rme->is_resolved(Bytecodes::_invokeinterface) ? " interface" : ""),
-                  cp_index,
-                  cp->pool_holder()->name()->as_C_string(),
-                  klass_name->as_C_string(), name->as_C_string(), signature->as_C_string(),
-                  (reason == nullptr ? "" : reason));
+        LogStream ls(log);
+        ls.print("%s%s method CP entry [%3d]: %s %s.%s:%s",
+                (archived ? "archived" : "reverted"),
+                (rme->is_resolved(Bytecodes::_invokeinterface) ? " interface" : ""),
+                cp_index,
+                cp->pool_holder()->name()->as_C_string(),
+                klass_name->as_C_string(), name->as_C_string(), signature->as_C_string());
+        if (reason != nullptr) {
+          ls.print(" %s", reason;
+        }
+        ls.cr()
       }
       if (archived) {
         Klass* resolved_klass = cp->resolved_klass_at(klass_cp_index);
