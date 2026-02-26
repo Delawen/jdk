@@ -477,7 +477,7 @@ void ConstantPoolCache::remove_resolved_method_entries_if_non_deterministic() {
                     rme->is_resolved(Bytecodes::_invokehandle)    ||
                     (rme->is_resolved(Bytecodes::_invokestatic) && VM_Version::supports_fast_class_init_checks());
 
-    const char *reason = nullptr;
+    const char* reason = nullptr;
     if (resolved && !CDSConfig::is_dumping_preimage_static_archive()
         && can_archive_resolved_method(src_cp, rme, reason)) {
       rme->mark_and_relocate(src_cp);
